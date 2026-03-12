@@ -1,0 +1,28 @@
+/*********************************************************************
+ * Service Definition : ZUI_SortimentssteuerungReport
+ * Zweck              : OData V4 Service – Fiori Elements List Report
+ *
+ * Aktivierung in ADT:
+ *   1. Diese Datei als "Service Definition" anlegen
+ *   2. Rechtsklick → "Create Service Binding"
+ *      → Name: ZUIT_SORTIMENTSSTEUERUNG
+ *      → Binding Type: OData V4 - UI
+ *   3. Service Binding aktivieren → "Publish"
+ *   4. URL kopieren für Postman / Fiori Launchpad
+ *
+ * Generierte OData URL (Beispiel):
+ *   /sap/opu/odata4/sap/zuit_sortimentssteuerung/srvd_a2x/
+ *   sap/zui_sortimentssteuerungsreport/0001/
+ *********************************************************************/
+@EndUserText.label: 'Sortimentssteuerung – OData V4 Service'
+
+define service ZUI_SortimentssteuerungReport {
+
+  -- Hauptentität: Sortimentsreport (Lesen + Aktionen)
+  expose ZC_SortimentssteuerungReport as SortimentssteuerungSet;
+
+  -- Customizing Tabellen (read-only, für F4-Hilfe im UI)
+  expose ZC_SensitivMapVH        as SensitivMapValueHelp;
+  expose ZC_ThresholdVH          as ThresholdValueHelp;
+
+}

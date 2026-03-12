@@ -1,0 +1,330 @@
+{
+  "info": {
+    "name": "Sortimentssteuerung – OData V4",
+    "description": "SAP S/4HANA OData V4 API für den Sortimentssteuerungsreport.\n\n## Setup\n1. Variable `baseUrl` auf dein SAP-System setzen\n2. Variable `client` auf deinen Mandanten setzen\n3. Basic Auth: SAP-Benutzer + Passwort\n4. Zuerst 'CSRF Token holen' ausführen – Token wird automatisch gesetzt\n\n## Reihenfolge\n1. CSRF Token holen\n2. Metadata lesen (Dokumentation)\n3. Artikel lesen (verschiedene Filter)\n4. Aktionen ausführen",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "zsortimentssteuerung-v4-collection"
+  },
+  "variable": [
+    { "key": "baseUrl",    "value": "https://your-s4hana-system.example.com", "type": "string" },
+    { "key": "client",     "value": "100",   "type": "string" },
+    { "key": "serviceUrl", "value": "{{baseUrl}}/sap/opu/odata4/sap/zuit_sortimentssteuerung/srvd_a2x/sap/zui_sortimentssteuerungsreport/0001", "type": "string" },
+    { "key": "csrfToken",  "value": "",      "type": "string" },
+    { "key": "matnr",      "value": "000000001234", "type": "string" },
+    { "key": "pzn",        "value": "01234567",     "type": "string" }
+  ],
+  "auth": {
+    "type": "basic",
+    "basic": [
+      { "key": "username", "value": "{{sapUser}}", "type": "string" },
+      { "key": "password", "value": "{{sapPassword}}", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "🔑 Auth",
+      "item": [
+        {
+          "name": "CSRF Token holen",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const token = pm.response.headers.get('x-csrf-token');",
+                "if (token) {",
+                "  pm.collectionVariables.set('csrfToken', token);",
+                "  pm.test('CSRF Token erhalten', () => pm.expect(token).to.not.be.empty);",
+                "} else {",
+                "  pm.test('CSRF Token NICHT erhalten', () => { throw new Error('Kein Token'); });",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-csrf-token", "value": "Fetch" },
+              { "key": "sap-client",   "value": "{{client}}" }
+            ],
+            "url": "{{serviceUrl}}/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "📋 Metadata & Service",
+      "item": [
+        {
+          "name": "Service Document",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "sap-client", "value": "{{client}}" }],
+            "url": "{{serviceUrl}}/",
+            "description": "Zeigt alle verfügbaren Entity Sets und Functions"
+          }
+        },
+        {
+          "name": "Metadata ($metadata)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "sap-client", "value": "{{client}}" },
+              { "key": "Accept",     "value": "application/xml" }
+            ],
+            "url": "{{serviceUrl}}/$metadata",
+            "description": "Vollständiges OData Metadaten-Dokument\nEnthält alle Entitäten, Felder, Aktionen und deren Parameter"
+          }
+        }
+      ]
+    },
+    {
+      "name": "📦 Artikel lesen",
+      "item": [
+        {
+          "name": "Alle Artikel (Top 25)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "const body = pm.response.json();",
+                "pm.test('value Array vorhanden', () => pm.expect(body.value).to.be.an('array'));",
+                "pm.test('Artikel zurückgegeben', () => pm.expect(body.value.length).to.be.greaterThan(0));"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "sap-client", "value": "{{client}}" }],
+            "url": {
+              "raw": "{{serviceUrl}}/SortimentssteuerungSet?$top=25&$skip=0&$count=true&$orderby=IsDeviation desc,OrderPos_W1_4 desc",
+              "query": [
+                { "key": "$top",     "value": "25" },
+                { "key": "$skip",    "value": "0" },
+                { "key": "$count",   "value": "true" },
+                { "key": "$orderby", "value": "IsDeviation desc,OrderPos_W1_4 desc" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Nur Abweichungen (Soll≠Ist)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "sap-client", "value": "{{client}}" }],
+            "url": {
+              "raw": "{{serviceUrl}}/SortimentssteuerungSet?$filter=IsDeviation eq 'X'&$top=50&$count=true",
+              "query": [
+                { "key": "$filter", "value": "IsDeviation eq 'X'" },
+                { "key": "$top",    "value": "50" },
+                { "key": "$count",  "value": "true" }
+              ]
+            },
+            "description": "Zeigt nur Artikel bei denen Soll-Modul ≠ Ist-Modul"
+          }
+        },
+        {
+          "name": "Nur gesperrte Module",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "sap-client", "value": "{{client}}" }],
+            "url": {
+              "raw": "{{serviceUrl}}/SortimentssteuerungSet?$filter=ModuleLocked eq true&$top=50",
+              "query": [
+                { "key": "$filter", "value": "ModuleLocked eq true" },
+                { "key": "$top",    "value": "50" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Schwellwert-Unterschreitungen",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "sap-client", "value": "{{client}}" }],
+            "url": {
+              "raw": "{{serviceUrl}}/SortimentssteuerungSet?$filter=BelowThreshold eq 'X'&$select=PZN,MaterialNumber,ProductDescription,CurrentModule,SensitivCategory,ThresholdValue,OrderQty_W1_4&$top=50",
+              "query": [
+                { "key": "$filter", "value": "BelowThreshold eq 'X'" },
+                { "key": "$select", "value": "PZN,MaterialNumber,ProductDescription,CurrentModule,SensitivCategory,ThresholdValue,OrderQty_W1_4" },
+                { "key": "$top",    "value": "50" }
+              ]
+            },
+            "description": "Artikel bei denen Ist-Menge < Schwellwert → Modul-Abstufung empfohlen"
+          }
+        },
+        {
+          "name": "Nach PZN filtern",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "sap-client", "value": "{{client}}" }],
+            "url": {
+              "raw": "{{serviceUrl}}/SortimentssteuerungSet?$filter=PZN eq '{{pzn}}'",
+              "query": [{ "key": "$filter", "value": "PZN eq '{{pzn}}'" }]
+            }
+          }
+        },
+        {
+          "name": "Einzelner Artikel (Key)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "sap-client", "value": "{{client}}" }],
+            "url": "{{serviceUrl}}/SortimentssteuerungSet(MaterialNumber='{{matnr}}',PZN='{{pzn}}')",
+            "description": "Einzelnen Artikel über Primärschlüssel abrufen"
+          }
+        },
+        {
+          "name": "WVZ filtern + Felder auswählen",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "sap-client", "value": "{{client}}" }],
+            "url": {
+              "raw": "{{serviceUrl}}/SortimentssteuerungSet?$filter=WVZ eq 'PHARM_RX'&$select=PZN,MaterialNumber,ProductDescription,CurrentModule,RecommendedModule_12W,IsDeviation,SensitivCategory,ThresholdValue&$orderby=IsDeviation desc",
+              "query": [
+                { "key": "$filter",  "value": "WVZ eq 'PHARM_RX'" },
+                { "key": "$select",  "value": "PZN,MaterialNumber,ProductDescription,CurrentModule,RecommendedModule_12W,IsDeviation,SensitivCategory,ThresholdValue" },
+                { "key": "$orderby", "value": "IsDeviation desc" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "⚡ Aktionen (Actions)",
+      "item": [
+        {
+          "name": "Merkmal variabel übernehmen",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "const body = pm.response.json();",
+                "pm.test('ModuleLocked ist false', () => pm.expect(body.ModuleLocked).to.equal(false));"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "sap-client",   "value": "{{client}}" },
+              { "key": "x-csrf-token", "value": "{{csrfToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{serviceUrl}}/SortimentssteuerungSet(MaterialNumber='{{matnr}}',PZN='{{pzn}}')/ZC_SortimentssteuerungReport.TakeModuleVariable",
+            "description": "Soll-Modul (12 Wochen) als Ist-Modul übernehmen – Sperre NICHT setzen.\nVorher: CSRF Token holen!"
+          }
+        },
+        {
+          "name": "Merkmal gesperrt übernehmen",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "const body = pm.response.json();",
+                "pm.test('ModuleLocked ist true', () => pm.expect(body.ModuleLocked).to.equal(true));"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "sap-client",   "value": "{{client}}" },
+              { "key": "x-csrf-token", "value": "{{csrfToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{serviceUrl}}/SortimentssteuerungSet(MaterialNumber='{{matnr}}',PZN='{{pzn}}')/ZC_SortimentssteuerungReport.TakeModuleLocked",
+            "description": "Soll-Modul übernehmen und SPERREN – Job ändert dieses Modul nicht mehr."
+          }
+        },
+        {
+          "name": "Sperre entfernen",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "const body = pm.response.json();",
+                "pm.test('ModuleLocked ist false', () => pm.expect(body.ModuleLocked).to.equal(false));"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "sap-client",   "value": "{{client}}" },
+              { "key": "x-csrf-token", "value": "{{csrfToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{serviceUrl}}/SortimentssteuerungSet(MaterialNumber='{{matnr}}',PZN='{{pzn}}')/ZC_SortimentssteuerungReport.RemoveLock"
+          }
+        },
+        {
+          "name": "Background Job manuell triggern (FULL)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "sap-client",   "value": "{{client}}" },
+              { "key": "x-csrf-token", "value": "{{csrfToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"run_mode\": \"FULL\",\n  \"werk\": \"\",\n  \"log_level\": \"I\"\n}"
+            },
+            "url": "{{serviceUrl}}/SortimentssteuerungSet/ZC_SortimentssteuerungReport.DetermineModule",
+            "description": "Automatische Modulberechnung für ALLE Artikel manuell starten.\nNormaler Weise läuft diese Action als Background Job (Mo+Do 02:00)."
+          }
+        },
+        {
+          "name": "Background Job – Nur neue Artikel (NEW_ONLY)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "sap-client",   "value": "{{client}}" },
+              { "key": "x-csrf-token", "value": "{{csrfToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"run_mode\": \"NEW_ONLY\",\n  \"werk\": \"\",\n  \"log_level\": \"I\"\n}"
+            },
+            "url": "{{serviceUrl}}/SortimentssteuerungSet/ZC_SortimentssteuerungReport.DetermineModule"
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Customizing lesen",
+      "item": [
+        {
+          "name": "Sensitivitäts-Zuordnungen (Tablo 1)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "sap-client", "value": "{{client}}" }],
+            "url": "{{serviceUrl}}/SensitivMapValueHelp",
+            "description": "Alle WVZ + Box → Sensitivitätskategorie Zuordnungen"
+          }
+        },
+        {
+          "name": "Schwellwerte (Tablo 2)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "sap-client", "value": "{{client}}" }],
+            "url": "{{serviceUrl}}/ThresholdValueHelp",
+            "description": "Alle Sensitivität + Modul → Schwellwert Kombinationen"
+          }
+        }
+      ]
+    }
+  ]
+}

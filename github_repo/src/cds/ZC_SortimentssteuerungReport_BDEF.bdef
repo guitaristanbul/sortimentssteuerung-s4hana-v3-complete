@@ -1,0 +1,62 @@
+/*********************************************************************
+ * Behavior Definition : ZC_SortimentssteuerungReport
+ * Version             : 3.0  – + Background Job Action
+ *
+ * Aktionen:
+ *   TakeModuleVariable   → UI: Merkmal übernehmen (variabel)
+ *   TakeModuleLocked     → UI: Merkmal übernehmen (gesperrt)
+ *   RemoveLock           → UI: Sperre entfernen
+ *   DetermineModule      → JOB: Automatische Modulberechnung (2x wöchentlich)
+ *                          background enabled → läuft als Application Job
+ *
+ * Job-Logik (PPT Slide 2):
+ *   → Nichtsortiment (MN): Dummy-Lieferant / gesperrt / Datacare-storniert / ThGr.73
+ *   → Besorger (MB)      : IFA-Arzneimittel / Sammel-PZN / Lieferantenkategorie 5
+ *   → Neuer Artikel      : täglich oder 2x wöchentlich, MB wenn kein Ausschluss
+ *********************************************************************/
+managed implementation in class ZBP_SortimentssteuerungRep unique;
+with draft;
+
+define behavior for ZC_SortimentssteuerungReport
+  alias SortimentsReport
+  persistent table ZSORTMODUL_T
+  lock master
+  etag master ModuleLastChangedDate
+{
+  update;
+
+  -- ── UI-AKTIONEN (Slide 7) ──────────────────────────────────────
+
+  action TakeModuleVariable
+    parameter ZA_TakeModuleParam
+    result    [1] $self;
+
+  action TakeModuleLocked
+    parameter ZA_TakeModuleParam
+    result    [1] $self;
+
+  action RemoveLock
+    result    [1] $self;
+
+  -- ── BACKGROUND JOB ACTION (NEU v3) ────────────────────────────
+  -- "background" → diese Action kann als Application Job geplant werden
+  -- "( features : instance )" → läuft je Instanz (Artikel)
+  -- Parameter: ZA_DetermineModuleParam (Stichtag, Werk, etc.)
+  action ( features : global ) DetermineModule
+    parameter ZA_DetermineModuleParam
+    result    [1] $self;
+
+  -- Feldsteuerung
+  field ( readonly ) CurrentModule
+    when ModuleLocked = abap_true;
+  field ( mandatory ) MaterialNumber;
+
+  mapping for ZSORTMODUL_T corresponding
+  {
+    MaterialNumber        = matnr;
+    PZN                   = zz1_pzn_prd;
+    CurrentModule         = zz1_sortmodul_prd;
+    ModuleLocked          = zz1_modulfix_prd;
+    ModuleLastChangedDate = zz1_sortmodul_date_prd;
+  }
+}
